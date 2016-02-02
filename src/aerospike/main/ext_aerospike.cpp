@@ -609,6 +609,8 @@ namespace HPHP {
     }
     /* }}} */
 
+
+
     /* {{{ proto int Aerospike::getMany( array keys, array &records [, array filter [, array options ]] )
        Returns a batch of records from the cluster */
     int64_t HHVM_METHOD(Aerospike, getMany, const Array& php_keys,
@@ -651,6 +653,53 @@ namespace HPHP {
         as_error_copy(&data->latest_error, &error);
         pthread_rwlock_unlock(&data->latest_error_mutex);
         return error.code;
+    }
+    /* }}} */
+
+    /* {{{ proto int Aerospike::getManyDirect( array keys, array &records [, array filter [, array options ]] )
+       Returns a batch of records from the cluster */
+    Array HHVM_METHOD(Aerospike, getManyDirect, const Array& php_keys,
+            const Variant& filter_bins,
+            const Variant& options)
+    {
+        VMRegAnchor         _;
+        auto                data = Native::data<Aerospike>(this_);
+        as_error            error;
+        as_policy_batch     batch_policy;
+        PolicyManager       policy_manager;
+
+        Array empty_array = Array::Create();
+        as_error_init(&error);
+
+        if (!data->as_ref_p || !data->as_ref_p->as_p) {
+            as_error_update(&error, AEROSPIKE_ERR_CLIENT,
+                    "Invalid aerospike connection object");
+        } else if (!data->is_connected) {
+            as_error_update(&error, AEROSPIKE_ERR_CLUSTER,
+                    "getMany: connection not established");
+        } else {
+            try {
+                BatchOpManager batch_op_manager(php_keys);
+                if (AEROSPIKE_OK == policy_manager.initPolicyManager(&batch_policy,
+                            "batch", &data->as_ref_p->as_p->config, error) &&
+                        AEROSPIKE_OK == policy_manager.set_policy(NULL,
+                            data->serializer_value, options, error)) {
+                    Array   temp_php_records = Array::Create();
+                    batch_op_manager.execute_batch_get(data->as_ref_p->as_p,
+                            temp_php_records, filter_bins, batch_policy, error);
+                    return temp_php_records;
+                }
+            } catch (const std::exception& e) {
+                as_error_update(&error, AEROSPIKE_ERR_CLIENT,
+                        "Failed to initialize batch operation");
+            }
+        }
+
+        pthread_rwlock_wrlock(&data->latest_error_mutex);
+        as_error_copy(&data->latest_error, &error);
+        pthread_rwlock_unlock(&data->latest_error_mutex);
+
+        return empty_array;
     }
     /* }}} */
 
@@ -1505,6 +1554,7 @@ namespace HPHP {
                 HHVM_ME(Aerospike, put);
                 HHVM_ME(Aerospike, get);
                 HHVM_ME(Aerospike, getMany);
+                HHVM_ME(Aerospike, getManyDirect);
                 HHVM_ME(Aerospike, addIndex);
                 HHVM_ME(Aerospike, dropIndex);
                 HHVM_ME(Aerospike, operate);

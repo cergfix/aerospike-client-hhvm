@@ -24,6 +24,8 @@ class Aerospike {
     <<__Native>>
         public function getMany(array $keys, mixed& $records, mixed $filter = NULL, mixed $options = NULL): int;
     <<__Native>>
+        public function getManyDirect(array $keys, mixed $filter = NULL, mixed $options = NULL): array;
+    <<__Native>>
         public function operate(array $key, array $operations, mixed& $returned = NULL, mixed $options = NULL): int;
     <<__Native>>
         public function remove(array $key, mixed $options = NULL): int;
